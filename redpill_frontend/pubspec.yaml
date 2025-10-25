@@ -1,0 +1,33 @@
+name: redpill_frontend
+description: "A new Flutter project."
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Dio do zapytań HTTP
+  dio: ^5.4.3+1
+  # Przechowywanie tokena
+  shared_preferences: ^2.5.3
+  # Proste zarządzanie stanem (UserProvider)
+  provider: ^6.1.2
+
+  cupertino_icons: ^1.0.6
+  http: ^1.5.0
+  shared_preferences_web: ^2.4.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+
