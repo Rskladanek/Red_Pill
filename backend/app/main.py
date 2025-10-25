@@ -2,22 +2,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-# USUWAMY content z tego importu:
+# <- WAŻNE: tutaj NIE ma już starego .api.content !!!
 from .api import auth, habits, health, users
+from .api import progress, daily_tasks  # <--- to musi być
+
 from .deps import engine
 from .models.base import Base
 
-# To zostaje, bo chcemy żeby tabele powstały przy starcie
+# import modeli, żeby create_all stworzyło tabele
 from .models import user, habit
-from .models import content as content_model  # ContentTask, Track
-from .models import daily as daily_model      # DailyAssignment
+from .models import content as content_model
+from .models import daily as daily_model
 
-app = FastAPI(title="Red Pill API", version="0.2.0")
+app = FastAPI(title="Red Pill API", version="0.3.0")
 
-# CORS – to zostaje jak było
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],   # dev pozwala frontowi na 127.0.0.1:random
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,13 +29,15 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-# podpinamy tylko te routery, które są poprawne
+# kolejność routerów nie musi być identyczna, ważne że wszystkie są dodane:
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(habits.router)
 app.include_router(users.router)
 
-# NIE podpinamy content.router bo jest stary i rozwala start
+# NOWE routery dla dashboardu:
+app.include_router(progress.router)     # /v1/progress/summary
+app.include_router(daily_tasks.router)  # /v1/daily/...
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
