@@ -2,12 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-# <- WAŻNE: tutaj NIE ma już starego .api.content !!!
 from .api import auth, habits, health, users
-from .api import progress, daily_tasks  # <--- to musi być
+from .api import progress, daily_tasks, lessons  # <-- MUSI być lessons tutaj
 
 from .deps import engine
 from .models.base import Base
+
+
 
 # import modeli, żeby create_all stworzyło tabele
 from .models import user, habit
@@ -35,9 +36,9 @@ app.include_router(auth.router)
 app.include_router(habits.router)
 app.include_router(users.router)
 
-# NOWE routery dla dashboardu:
 app.include_router(progress.router)     # /v1/progress/summary
 app.include_router(daily_tasks.router)  # /v1/daily/...
+app.include_router(lessons.router)      # /v1/mind/lesson itd.
 
 @app.get("/", include_in_schema=False)
 def root_redirect():
