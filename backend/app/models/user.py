@@ -1,27 +1,18 @@
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Integer, Boolean
-from .base import BaseModel
-import enum
+from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
+from app.db import Base
 
-
-class UserRank(str, enum.Enum):
-    ADEPT = "Adept"
-    WARRIOR = "Wojownik"
-    STRATEGIST = "Strateg"
-    MASTER = "Mistrz"
-
-
-class User(BaseModel):
+class User(Base):
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    pw_hash: Mapped[str] = mapped_column(String(255))
-    timezone: Mapped[str] = mapped_column(String(64), default="Europe/Warsaw")
 
-    # --- NOWE POLA ---
-    # Pola do gamifikacji i statusu
-    rank: Mapped[UserRank] = mapped_column(String(50), default=UserRank.ADEPT)
-    experience: Mapped[int] = mapped_column(Integer, default=0)
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
 
-    # Pole do "Hard Mode"
-    hard_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    # one-to-many – wczyta się po imporcie UserProgress
+    progress = relationship(
+        "UserProgress",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

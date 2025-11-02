@@ -1,42 +1,49 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
-import 'login_page.dart';
 import 'services/auth_service.dart';
-import 'dashboard_page.dart';
+import 'pages/dashboard_page.dart';
+import 'login_page.dart';
+import 'register_page.dart';
 import 'models/user_model.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // sprawdź czy mamy ważny token -> wtedy od razu dashboard
-  final user = await AuthService.checkSession();
-
-  runApp(MyApp(initialUser: user));
+  runApp(const RedPillApp());
 }
 
-class MyApp extends StatelessWidget {
-  final UserModel? initialUser;
-  const MyApp({super.key, required this.initialUser});
+class RedPillApp extends StatelessWidget {
+  const RedPillApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = ThemeData.dark(useMaterial3: true).copyWith(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF9B59FF), brightness: Brightness.dark),
+      scaffoldBackgroundColor: const Color(0xFF0F0E11),
+      cardColor: const Color(0xFF17161A),
+    );
+
     return MaterialApp(
-      title: 'Red Pill',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0B0B0E),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFD90429),
-          secondary: Color(0xFFD90429),
-        ),
-        textTheme: ThemeData.dark().textTheme.apply(
-              bodyColor: Colors.white,
-              displayColor: Colors.white,
-            ),
+      title: 'RedPill',
+      theme: theme,
+      routes: {
+        '/login': (_) => const LoginPage(),
+        '/register': (_) => const RegisterPage(),
+      },
+      home: FutureBuilder<UserModel?>(
+        future: AuthService.checkSession(),
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final user = snap.data;
+          if (user == null) {
+            return const LoginPage();
+          }
+          return const DashboardPage();
+        },
       ),
-      home: initialUser != null
-          ? DashboardPage(user: initialUser!)
-          : const LoginPage(),
     );
   }
 }

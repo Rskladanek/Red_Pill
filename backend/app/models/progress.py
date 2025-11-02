@@ -1,35 +1,18 @@
-from fastapi import APIRouter
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship
+from app.db import Base
 
-router = APIRouter(
-    prefix="/v1/progress",
-    tags=["progress"],
-)
+class UserProgress(Base):
+    __tablename__ = "user_progress"
 
-@router.get("/summary")
-async def get_progress_summary():
-    # TODO w przyszłości: policz wszystko z DB pod konkretnego usera (po tokenie)
-    # Teraz: mockowane wartości, żeby frontend już mógł działać.
-    return {
-        "user": {
-            "email": "placeholder@user.com",
-            "rank": "Adept",
-            "xp": 27,
-            "next_rank": "Warrior",
-            "next_rank_xp": 50,
-            "streak_days": 5
-        },
-        "tracks": {
-            "mind": {"percent": 0.40, "done_total": 18},
-            "body": {"percent": 0.20, "done_total": 7},
-            "soul": {"percent": 0.55, "done_total": 12}
-        },
-        "tasks": {
-            "done_today": 2,
-            "assigned_today": 3,
-            "total_done_all_time": 37
-        },
-        "quote": {
-            "text": "Kto walczy z potworami, niech uważa, by samemu nie stać się potworem.",
-            "author": "Nietzsche"
-        }
-    }
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    track = Column(String, nullable=False)        # "mind" | "body" | "soul"
+    xp = Column(Integer, default=0, nullable=False)
+    streak_days = Column(Integer, default=0, nullable=False)
+
+    user = relationship("User", back_populates="progress")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "track", name="uq_user_track"),
+    )

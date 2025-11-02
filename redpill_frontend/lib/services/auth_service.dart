@@ -1,148 +1,84 @@
-// lib/services/auth_service.dart
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../models/user_model.dart';
 
-// wynik logowania/rejestracji
-class AuthResult {
-  final String token;
-  final UserModel user;
-
-  AuthResult({
-    required this.token,
-    required this.user,
-  });
-}
-
 class AuthService {
-  // jeśli backend jest na innym adresie/porcie -> zmień to
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static String get baseUrl =>
+      const String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000');
 
-  // -------- LOGIN --------
-  static Future<AuthResult> login({
-    required String email,
-    required String password,
-  }) async {
-    final uri = Uri.parse("$baseUrl/v1/auth/login");
+  static String? token;
 
-    final resp = await http.post(
-      uri,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-      }),
-    );
-
-    if (resp.statusCode != 200) {
-      throw Exception("LOGIN_HTTP_${resp.statusCode}");
+  static Map<String, String> _headers({bool withAuth = false}) {
+    final h = <String, String>{'Content-Type': 'application/json'};
+    if (withAuth && token != null) h['Authorization'] = 'Bearer $token';
+    return h;
     }
 
-    final data = jsonDecode(resp.body);
-
-    // token może być pod różnymi nazwami → bierzemy którykolwiek
-    final token = data["token"] ?? data["access"] ?? data["jwt"];
-    if (token == null || token is! String) {
-      throw Exception("LOGIN_NO_TOKEN");
-    }
-
-    final userJson = data["user"];
-    if (userJson == null || userJson is! Map<String, dynamic>) {
-      throw Exception("LOGIN_NO_USER");
-    }
-
-    final user = UserModel.fromJson(userJson);
-
-    // zapisz dane lokalnie (Chrome/mobile)
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("auth_token", token);
-    await prefs.setString("user_email", user.email);
-    await prefs.setString("user_rank", user.rank);
-
-    return AuthResult(token: token, user: user);
+  // zapis/odczyt sesji w localStorage
+  static void _saveSession(String tkn, UserModel user) {
+    token = tkn;
+    final payload = jsonEncode({'token': tkn, 'user': user.toJson()});
+    html.window.localStorage['session'] = payload;
   }
 
-  // -------- REJESTRACJA --------
-  static Future<AuthResult> rawRegister({
-    required String email,
-    required String password,
-  }) async {
-    final uri = Uri.parse("$baseUrl/v1/auth/register");
-
-    final resp = await http.post(
-      uri,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: jsonEncode({
-        "email": email,
-        "password": password,
-      }),
-    );
-
-    if (resp.statusCode != 200) {
-      throw Exception("REGISTER_HTTP_${resp.statusCode}");
-    }
-
-    final data = jsonDecode(resp.body);
-
-    final token = data["token"] ?? data["access"] ?? data["jwt"];
-    if (token == null || token is! String) {
-      throw Exception("REGISTER_NO_TOKEN");
-    }
-
-    final userJson = data["user"];
-    if (userJson == null || userJson is! Map<String, dynamic>) {
-      throw Exception("REGISTER_NO_USER");
-    }
-
-    final user = UserModel.fromJson(userJson);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("auth_token", token);
-    await prefs.setString("user_email", user.email);
-    await prefs.setString("user_rank", user.rank);
-
-    return AuthResult(token: token, user: user);
-  }
-
-  // -------- SESJA (sprawdź czy token jeszcze działa) --------
   static Future<UserModel?> checkSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString("auth_token");
-    if (token == null) return null;
-
-    final uri = Uri.parse("$baseUrl/v1/auth/check");
-
-    final resp = await http.get(
-      uri,
-      headers: {
-        "Authorization": "Bearer $token",
-      },
-    );
-
-    if (resp.statusCode != 200) {
+    try {
+      final raw = html.window.localStorage['session'];
+      if (raw == null) return null;
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      token = (map['token'] ?? '').toString();
+      final userMap = (map['user'] as Map?)?.cast<String, dynamic>() ?? {};
+      return UserModel.fromMap(userMap);
+    } catch (_) {
       return null;
     }
-
-    final data = jsonDecode(resp.body);
-    if (data is! Map<String, dynamic>) {
-      return null;
-    }
-
-    return UserModel.fromJson(data);
   }
 
-  // -------- WYLOGOWANIE --------
-  static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove("auth_token");
-    await prefs.remove("user_email");
-    await prefs.remove("user_rank");
+  static Future<UserModel> register(String email, String password) async {
+    final r = await http.post(
+      Uri.parse('$baseUrl/v1/auth/register'),
+      headers: _headers(),
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      final tkn = (data['token'] ?? '').toString();
+      final user = UserModel.fromMap((data['user'] as Map).cast<String, dynamic>());
+      _saveSession(tkn, user);
+      return user;
+    }
+
+    if (r.statusCode == 409) {
+      // użytkownik istnieje -> spróbuj zalogować
+      return login(email, password);
+    }
+
+    throw Exception('Register failed (${r.statusCode})');
+  }
+
+  static Future<UserModel> login(String email, String password) async {
+    final r = await http.post(
+      Uri.parse('$baseUrl/v1/auth/login'),
+      headers: _headers(),
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      final tkn = (data['token'] ?? '').toString();
+      final user = UserModel.fromMap((data['user'] as Map).cast<String, dynamic>());
+      _saveSession(tkn, user);
+      return user;
+    }
+
+    throw Exception('Login failed (${r.statusCode})');
+  }
+
+  static void logout() {
+    token = null;
+    html.window.localStorage.remove('session'); // w Dart jest remove(), nie removeItem()
   }
 }
 

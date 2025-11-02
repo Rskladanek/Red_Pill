@@ -1,16 +1,42 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
-# Ten schemat definiuje, co API zwraca na zewnątrz (dla Pydantic)
+
 class LessonOut(BaseModel):
     id: int
     title: str
-    content: str
-    source: str
-    application: str
+    completed: bool = False
+    html: Optional[str] = None
 
-    # To jest kluczowe (dla Pydantic v2):
-    # Pozwala Pydantic czytać dane z atrybutów obiektu (jak w modelu SQLAlchemy)
-    # To jest nowa nazwa dla starego 'orm_mode = True'
     class Config:
         from_attributes = True
 
+
+class LessonCompleteIn(BaseModel):
+    completed: bool = True
+
+
+class ModulesOut(BaseModel):
+    modules: List[str]
+
+
+class QuizStartOut(BaseModel):
+    quiz_id: int
+    question_id: int
+    question: str
+    options: List[str]
+
+
+class QuizAnswerIn(BaseModel):
+    track: str
+    quiz_id: Optional[int] = None
+    question_id: Optional[int] = None
+    answer: str
+
+
+class SummaryOut(BaseModel):
+    xp_mind: int = 0
+    xp_body: int = 0
+    xp_soul: int = 0
+    streak_days: int = 0
+    experience: int = 0

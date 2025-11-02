@@ -1,58 +1,38 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+# app/api/auth.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
 
-from ..deps import get_db, get_current_user
+from ..deps import get_db
+from ..core.security import get_password_hash, verify_password, create_access_token
 from ..models.user import User
-from ..schemas.auth import RegisterIn, LoginIn, TokenOut
-from ..schemas.user import UserOut
-from ..core.security import hash_pw, verify_pw, make_token
-from ..core.config import settings
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
 
-def _build_auth_response(u: User) -> TokenOut:
-    """
-    Zwracamy token w paru polach naraz, żeby frontend nie miał focha,
-    plus pełny obiekt usera.
-    """
-    t = make_token(str(u.id), settings.ACCESS_MIN)
-    user_data = UserOut.model_validate(u)
-    return TokenOut(
-        access=t,
-        token=t,
-        jwt=t,
-        user=user_data,
-    )
+class AuthIn(BaseModel):
+    email: EmailStr
+    password: str
 
-@router.post("/register", response_model=TokenOut)
-async def register(data: RegisterIn, db: AsyncSession = Depends(get_db)):
-    # sprawdź czy email już istnieje
-    q = await db.execute(select(User).where(User.email == data.email))
-    if q.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email exists")
+@router.post("/register")
+def register(data: AuthIn, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == data.email).first()
+    if existing:
+        # Masz już takiego usera
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
 
-    # utwórz usera
-    u = User(
-        email=data.email,
-        pw_hash=hash_pw(data.password),
-    )
+    u = User(email=data.email, password_hash=get_password_hash(data.password))
     db.add(u)
-    await db.commit()
-    await db.refresh(u)
+    db.commit()
+    db.refresh(u)
 
-    # zwróć token + user
-    return _build_auth_response(u)
+    token = create_access_token(u.id, u.email)  # <<< WŁAŚCIWE WYWOŁANIE
+    return {"token": token, "user": {"id": u.id, "email": u.email}}
 
-@router.post("/login", response_model=TokenOut)
-async def login(data: LoginIn, db: AsyncSession = Depends(get_db)):
-    q = await db.execute(select(User).where(User.email == data.email))
-    u = q.scalar_one_or_none()
-    if not u or not verify_pw(data.password, u.pw_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+@router.post("/login")
+def login(data: AuthIn, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user or not verify_password(data.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    return _build_auth_response(u)
-
-@router.get("/check", response_model=UserOut)
-async def check(user: User = Depends(get_current_user)):
-    return user
+    token = create_access_token(user.id, user.email)  # <<< WŁAŚCIWE WYWOŁANIE
+    return {"token": token, "user": {"id": user.id, "email": user.email}}

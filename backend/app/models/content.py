@@ -1,70 +1,62 @@
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Integer, Enum, Text, Boolean
-from .base import BaseModel
-import enum
-
-# W której ścieżce jest zadanie / lekcja / cokolwiek
-class Track(str, enum.Enum):
-    mind = "mind"
-    body = "body"
-    soul = "soul"
-
-# Zadanie praktyczne do zrobienia w realu (dzienne wyzwania)
-class ContentTask(BaseModel):
-    __tablename__ = "content_tasks"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    # "mind" / "body" / "soul"
-    track: Mapped[Track] = mapped_column(Enum(Track))
-
-    # nagłówek
-    title: Mapped[str] = mapped_column(String(120))
-
-    # opis co dokładnie zrobić / jak się zachować
-    description: Mapped[str] = mapped_column(Text)
-
-    difficulty: Mapped[int] = mapped_column(Integer, default=1)
-
-    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
+)
+from sqlalchemy.orm import relationship
+from app.db import Base
 
 
-# Lekcje do MIND/BODY/SOUL
-# - theory = teoria (zasady, mindset)
-# - practice = instrukcja zachowania/postawy/stylu
-# - check = quiz / test samooceny
-class LessonType(str, enum.Enum):
-    theory = "theory"
-    practice = "practice"
-    check = "check"
-
-class Lesson(BaseModel):
+class Lesson(Base):
     __tablename__ = "lessons"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id = Column(Integer, primary_key=True)
+    track = Column(String, nullable=False, index=True)      # "mind" | "body" | "soul"
+    module = Column(String, nullable=False, index=True)     # np. "Foundations", "Focus"
+    title = Column(String, nullable=False)
+    html = Column(Text, nullable=False, default="")
 
-    track: Mapped[Track] = mapped_column(Enum(Track))          # mind/body/soul
-    kind: Mapped[LessonType] = mapped_column(Enum(LessonType)) # theory/practice/check
-
-    title: Mapped[str] = mapped_column(String(200))
-    content: Mapped[str] = mapped_column(Text)  # tekst do przeczytania albo polecenie
-
-    # quiz / sprawdzenie wiedzy (opcjonalne pola)
-    quiz_a: Mapped[str] = mapped_column(String(200), default="")
-    quiz_b: Mapped[str] = mapped_column(String(200), default="")
-    quiz_c: Mapped[str] = mapped_column(String(200), default="")
-    correct: Mapped[str] = mapped_column(String(1), default="")  # "A"/"B"/"C"
-
-    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    __table_args__ = (
+        UniqueConstraint("track", "module", "title", name="uq_lesson_unique"),
+        Index("ix_lesson_track_module", "track", "module"),
+    )
 
 
-# Cytaty motywacyjne do "Cytat dnia"
-class Quote(BaseModel):
-    __tablename__ = "quotes"
+class UserLesson(Base):
+    __tablename__ = "user_lessons"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    lesson_id = Column(Integer, ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False, index=True)
+    completed = Column(Boolean, nullable=False, default=False)
 
-    text: Mapped[str] = mapped_column(Text)
-    author: Mapped[str] = mapped_column(String(120))
+    # relacje – nie musimy dopinać back_populates w User, żeby uniknąć kolejnego import hell
+    user = relationship("User")
+    lesson = relationship("Lesson")
 
-    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    __table_args__ = (
+        UniqueConstraint("user_id", "lesson_id", name="uq_user_lesson"),
+    )
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+
+    id = Column(Integer, primary_key=True)
+    track = Column(String, nullable=False, index=True)      # "mind" | "body" | "soul"
+    module = Column(String, nullable=False, index=True)     # np. "Foundations"
+    question = Column(Text, nullable=False)
+    opt_a = Column(String, nullable=False)
+    opt_b = Column(String, nullable=False)
+    opt_c = Column(String, nullable=False)
+    # 0 -> A, 1 -> B, 2 -> C
+    correct = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_quiz_track_module", "track", "module"),
+    )

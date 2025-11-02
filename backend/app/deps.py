@@ -1,40 +1,28 @@
-# app/deps.py
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-from .core.config import settings
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.orm import Session
+from .db import SessionLocal
 from .core.security import decode_token
-from .models.base import Base
 from .models.user import User
 
-engine = create_async_engine(settings.DB_URL, echo=False, future=True)
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
-
-bearer = HTTPBearer(auto_error=False)
-
-async def get_db() -> AsyncSession:
-    async with SessionLocal() as session:
-        yield session
-
-async def get_current_user(
-    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    if creds is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth")
-
-    payload = decode_token(creds.credentials)
-    if not payload or "sub" not in payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
+def get_db():
+    db = SessionLocal()
     try:
-        uid = int(payload["sub"])
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid subject")
+        yield db
+    finally:
+        db.close()
 
-    user = await db.get(User, uid)
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    auth = request.headers.get("Authorization")
+    if not auth:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    parts = auth.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    data = decode_token(parts[1])
+    uid = data.get("sub")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = db.get(User, int(uid))
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
+        raise HTTPException(status_code=401, detail="User not found")
     return user

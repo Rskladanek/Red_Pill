@@ -1,37 +1,33 @@
-# app/core/security.py
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import datetime, timedelta
+from typing import Any, Dict
 from jose import jwt, JWTError
 from passlib.context import CryptContext
-from .config import settings
-import hashlib
 
-ALGO = "HS256"
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+JWT_SECRET = os.getenv("JWT_SECRET", "devsecret")
+JWT_ALG = "HS256"
+_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def _norm_pw(p: str) -> str:
-    """
-    Hashujemy najpierw sha256 -> hex (64 znaki),
-    żeby bcrypt zawsze dostał stałą długość i nie ucinał.
-    """
-    return hashlib.sha256(p.encode("utf-8")).hexdigest()
+def get_password_hash(password: str) -> str:
+    return _pwd.hash(password)
 
-def hash_pw(p: str) -> str:
-    return pwd.hash(_norm_pw(p))
+def verify_password(password: str, password_hash: str) -> bool:
+    return _pwd.verify(password, password_hash)
 
-def verify_pw(plain: str, pw_hash: str) -> bool:
-    return pwd.verify(_norm_pw(plain), pw_hash)
-
-def make_token(sub: str, minutes: int) -> str:
-    now = datetime.now(timezone.utc)
+def create_access_token(user_id: int, email: str, expires: timedelta | None = None) -> str:
+    if expires is None:
+        expires = timedelta(days=30)
     payload = {
-        "sub": sub,
-        "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=minutes)).timestamp()),
+        "sub": str(user_id),
+        "email": email,
+        "exp": datetime.utcnow() + expires,
     }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=ALGO)
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
-def decode_token(token: str) -> dict | None:
+def decode_token(token: str) -> Dict[str, Any]:
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGO])
-    except JWTError:
-        return None
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except JWTError as e:
+        # log do konsoli, żeby było jasne czemu 401
+        print(f"[JWT] decode error: {e}")
+        return {}

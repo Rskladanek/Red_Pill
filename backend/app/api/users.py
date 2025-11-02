@@ -1,50 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
-from sqlalchemy.ext.asyncio import AsyncSession
-from ..deps import get_db, get_current_user
+# app/api/users.py
+from fastapi import APIRouter, Depends
+from ..deps import get_current_user
 from ..models.user import User
-from ..schemas.user import UserOut
-from pydantic import BaseModel
 
-router = APIRouter(prefix="/v1/users", tags=["users"])
+router = APIRouter()
 
-class HardModeIn(BaseModel):
-    active: bool
+def _get(obj, name, default=None):
+    return getattr(obj, name, default)
 
-@router.get("/me", response_model=UserOut)
-async def get_user_profile(user: User = Depends(get_current_user)):
-    """
-    Zwraca profil zalogowanego użytkownika.
-    """
-    return user
-
-@router.post("/me/hard-mode")
-async def set_hard_mode(
-    data: HardModeIn,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    """
-    Włącza lub wyłącza "Hard Mode" dla użytkownika.
-    """
-    user.hard_mode = data.active
-    await db.commit()
-    return {"message": f"Hard Mode set to {data.active}", "hard_mode": user.hard_mode}
-
-@router.post("/me/timezone")
-async def set_timezone(
-    timezone: str = Body(..., embed=True),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
-):
-    """
-    Pozwala klientowi zaktualizować swoją strefę czasową.
-    """
-    # Prosta walidacja
-    import pytz
-    try:
-        pytz.timezone(timezone)
-        user.timezone = timezone
-        await db.commit()
-        return {"message": "Timezone updated", "timezone": user.timezone}
-    except pytz.UnknownTimeZoneError:
-        raise HTTPException(400, "Invalid timezone name")
+@router.get("/me")
+def read_me(user: User = Depends(get_current_user)):
+    # zwracamy “bezpieczne” pole usera do frontu
+    return {
+        "id": _get(user, "id"),
+        "email": _get(user, "email"),
+        "username": _get(user, "username"),
+        "experience": _get(user, "experience", 0),
+        "xp_mind": _get(user, "xp_mind", 0),
+        "xp_body": _get(user, "xp_body", 0),
+        "xp_soul": _get(user, "xp_soul", 0),
+        "streak_days": _get(user, "streak_days", 0),
+        "last_active": _get(user, "last_active").isoformat() if _get(user, "last_active") else None,
+    }
