@@ -12,15 +12,18 @@ class TrackTab extends StatefulWidget {
 }
 
 class _TrackTabState extends State<TrackTab> {
-  late Future<List<String>> _modsFuture;
+  Future<List<String>>? _modsFuture;
 
   @override
   void initState() {
     super.initState();
-    _modsFuture = ApiService.fetchModules(widget.track);
+    if (widget.track == 'mind') {
+      _modsFuture = ApiService.fetchModules(widget.track);
+    }
   }
 
   Future<void> _refresh() async {
+    if (widget.track != 'mind') return;
     setState(() {
       _modsFuture = ApiService.fetchModules(widget.track);
     });
@@ -28,6 +31,15 @@ class _TrackTabState extends State<TrackTab> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔴 BODY / SOUL – na razie tylko zapowiedź, bez łączenia z backendem
+    if (widget.track == 'body') {
+      return _ComingSoonBody();
+    }
+    if (widget.track == 'soul') {
+      return _ComingSoonSoul();
+    }
+
+    // 🧠 MIND – pełne moduły z API
     return RefreshIndicator(
       onRefresh: _refresh,
       child: FutureBuilder<List<String>>(
@@ -44,7 +56,7 @@ class _TrackTabState extends State<TrackTab> {
                 const Icon(Icons.error_outline, size: 48, color: Colors.red),
                 const SizedBox(height: 16),
                 Text(
-                  'Nie mogę pobrać modułów dla ${widget.track}: ${snapshot.error}',
+                  'Nie mogę pobrać modułów dla MIND: ${snapshot.error}',
                   style: const TextStyle(color: Colors.redAccent),
                 ),
               ],
@@ -56,7 +68,7 @@ class _TrackTabState extends State<TrackTab> {
               padding: const EdgeInsets.all(24),
               children: const [
                 SizedBox(height: 80),
-                Text('Brak modułów dla tego filaru (jeszcze).'),
+                Text('Brak modułów dla MIND (jeszcze).'),
               ],
             );
           }
@@ -66,7 +78,7 @@ class _TrackTabState extends State<TrackTab> {
             itemBuilder: (context, index) {
               final module = modules[index];
               return _ModuleCard(
-                track: widget.track,
+                track: 'mind',
                 module: module,
               );
             },
@@ -91,6 +103,7 @@ class _ModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).textTheme;
+    final color = Theme.of(context).colorScheme.primary;
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 16),
@@ -122,7 +135,7 @@ class _ModuleCard extends StatelessWidget {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ElevatedButton(
+                TextButton(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -133,6 +146,9 @@ class _ModuleCard extends StatelessWidget {
                       ),
                     );
                   },
+                  style: TextButton.styleFrom(
+                    foregroundColor: color,
+                  ),
                   child: const Text('Moduł'),
                 ),
                 const SizedBox(height: 8),
@@ -147,6 +163,10 @@ class _ModuleCard extends StatelessWidget {
                       ),
                     );
                   },
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: color.withOpacity(0.6)),
+                    foregroundColor: color,
+                  ),
                   child: const Text('Daily quiz'),
                 ),
               ],
@@ -154,6 +174,60 @@ class _ModuleCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ComingSoonBody extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).textTheme;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const SizedBox(height: 40),
+        Text(
+          'BODY – w przygotowaniu',
+          style: s.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Tu wjedzie:\n'
+          '• Siła (plan siłowy + progres)\n'
+          '• Kondycja (cardio, wydolność)\n'
+          '• Sylwetka (masa / redukcja)\n'
+          '• Zdrowie (sen, regeneracja, badania)\n\n'
+          'Na razie ogarnij MIND. BODY dostanie pełne moduły w kolejnej wersji.',
+          style: TextStyle(color: Colors.grey, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+class _ComingSoonSoul extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).textTheme;
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const SizedBox(height: 40),
+        Text(
+          'SOUL – w przygotowaniu',
+          style: s.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Tu wjedzie:\n'
+          '• Spokój (work–life, emocje)\n'
+          '• Wartości (własny kodeks)\n'
+          '• Relacje (rodzina, związek, ekipa)\n'
+          '• Wizja długoterminowa (kim się stajesz)\n\n'
+          'Póki co buduj fundamenty w MIND – później dolepimy tu resztę charakteru.',
+          style: TextStyle(color: Colors.grey, height: 1.4),
+        ),
+      ],
     );
   }
 }

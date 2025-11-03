@@ -46,6 +46,16 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _loginWithGoogle() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Login przez Google: front gotowy, backend/OAuth do spięcia.'),
+      ),
+    );
+    // Docelowo:
+    // await AuthService.signInWithGoogle();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).textTheme;
@@ -63,10 +73,16 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('REDPILL', style: s.headlineSmall),
+                  Text(
+                    'REDPILL LOGIN',
+                    style: s.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Hard mode coach w twoim telefonie.',
+                    'Wejdź na hard mode, ogarnij Mind / Body / Soul.',
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 24),
@@ -109,9 +125,32 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text(
+                          'albo',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: _loginWithGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: const Text('Zaloguj przez Google'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextButton(
                     onPressed: () =>
-                        Navigator.of(context).pushNamed('/register'),
+                        Navigator.of(context).pushReplacementNamed('/register'),
                     child: const Text('Nie mam konta – zarejestruj'),
                   )
                 ],

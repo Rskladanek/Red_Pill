@@ -1,71 +1,260 @@
-from typing import List
+from __future__ import annotations
+
+from typing import List, Dict, Any
+
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.api.deps import get_db, get_current_user
-from app.schemas.content import LessonOut, CompleteIn, QuizStartOut, QuizAnswerIn, TaskOut
+from app.schemas.content import (
+    LessonOut,
+    CompleteIn,
+    QuizStartOut,
+    QuizAnswerIn,
+    TaskOut,
+)
 from app.models.content import Lesson, QuizQuestion, Task
-from app.models.user import User, UserLesson, UserQuizAnswer
+from app.models.user import User, UserLesson
+from app.core.xp import grant_xp
 
 router = APIRouter(prefix="/content", tags=["content"])
 
+
+# ---------- MODULES ----------
+
+
 @router.get("/{track}/modules", response_model=List[str])
-def list_modules(track: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    rows = (db.execute(select(Lesson.module)
+def list_modules(
+    track: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> List[str]:
+    """
+    Zwraca listę nazw modułów dla danego tracka (mind/body/soul).
+    """
+    rows = (
+        db.execute(
+            select(Lesson.module)
             .where(Lesson.track == track)
             .group_by(Lesson.module)
-            .order_by(func.min(Lesson.order))).scalars().all())
-    return rows
+            .order_by(Lesson.module)
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
+
+
+# ---------- LESSONS ----------
+
 
 @router.get("/{track}/lessons", response_model=List[LessonOut])
-def list_lessons(track: str, module: str = Query(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    lessons = (db.execute(select(Lesson)
-               .where(Lesson.track == track, Lesson.module == module)
-               .order_by(Lesson.order)).scalars().all())
-    completed_ids = {ul.lesson_id for ul in user.lessons if ul.completed}
-    return [LessonOut(id=l.id, track=l.track, module=l.module, order=l.order, title=l.title, content=l.content, completed=(l.id in completed_ids)) for l in lessons]
+def list_lessons(
+    track: str,
+    module: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> List[LessonOut]:
+    """
+    Zwraca listę lekcji w module + flaga completed dla usera.
+    """
+    lessons = (
+        db.query(Lesson)
+        .filter_by(track=track, module=module)
+        .order_by(Lesson.order)
+        .all()
+    )
+
+    user_lesson_ids = {
+        ul.lesson_id
+        for ul in db.query(UserLesson)
+        .filter_by(user_id=user.id)
+        .all()
+    }
+
+    result: List[LessonOut] = []
+    for l in lessons:
+        result.append(
+            LessonOut(
+                id=l.id,
+                track=l.track,
+                module=l.module,
+                order=l.order,
+                title=l.title,
+                content=l.content,
+                completed=l.id in user_lesson_ids,
+            )
+        )
+    return result
+
+
+# ---------- COMPLETE LESSON + XP ----------
+
 
 @router.post("/lessons/{lesson_id}/complete")
-def set_lesson_complete(lesson_id: int, body: CompleteIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    ul = db.query(UserLesson).filter_by(user_id=user.id, lesson_id=lesson_id).first()
-    if not ul:
-        ul = UserLesson(user_id=user.id, lesson_id=lesson_id, completed=False)
-        db.add(ul)
-    ul.completed = bool(body.complete)
-    prog = user.progress
-    if body.complete:
-        prog.xp_mind += 5; prog.exp_total += 5
+def complete_lesson(
+    lesson_id: int,
+    data: CompleteIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Oznacza lekcję jako ukończoną / nieukończoną.
+
+    Front wysyła JSON: { "complete": true/false }
+
+    Reguły XP:
+    - jeśli complete == true i user nie miał jeszcze tej lekcji -> +10 XP w danym tracku
+    - jeśli complete == false -> usuwamy flagę ukończenia, XP NIE cofamy
+      (XP to historia, nie checkbox).
+    """
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    track = lesson.track  # "mind" / "body" / "soul"
+
+    existing = (
+        db.query(UserLesson)
+        .filter_by(user_id=user.id, lesson_id=lesson_id)
+        .first()
+    )
+
+    if data.complete:
+        if existing is None:
+            ul = UserLesson(user_id=user.id, lesson_id=lesson_id)
+            db.add(ul)
+            # pierwszy raz skończona lekcja -> XP
+            grant_xp(db, user.id, track=track, amount=10)
+    else:
+        # odznaczanie lekcji: kasujemy UserLesson,
+        # ale nie cofamy XP (XP to "przerobione kiedyś")
+        if existing is not None:
+            db.delete(existing)
+
     db.commit()
-    return {"ok": True}
+    return {"status": "ok"}
+
+
+# ---------- QUIZ START ----------
+
 
 @router.get("/{track}/quiz/start", response_model=QuizStartOut)
-def quiz_start(track: str, module: str = Query(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    q = (db.query(QuizQuestion)
-         .filter_by(track=track, module=module)
-         .order_by(QuizQuestion.order.asc()).first())
+def quiz_start(
+    track: str,
+    module: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> QuizStartOut:
+    """
+    Zwraca pierwsze pytanie quizu dla modułu.
+    """
+    q = (
+        db.query(QuizQuestion)
+        .filter_by(track=track, module=module)
+        .order_by(QuizQuestion.order)
+        .first()
+    )
     if not q:
-        raise HTTPException(404, "No questions")
-    return q.as_public()
+        raise HTTPException(status_code=404, detail="No quiz questions")
+
+    # QuizQuestion ma metodę as_public() zwracającą:
+    # { "question_id", "module", "question", "options" }
+    data = q.as_public()
+    return QuizStartOut.model_validate(data)
+
+
+# ---------- QUIZ ANSWER + XP ----------
+
 
 @router.post("/{track}/quiz/answer")
-def quiz_answer(track: str, data: QuizAnswerIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    q = db.get(QuizQuestion, data.question_id)
-    if not q or q.track != track or q.module != data.module:
-        raise HTTPException(404, "Question not found")
-    correct = (q.correct_index == data.answer_index)
-    db.add(UserQuizAnswer(user_id=user.id, question_id=q.id, picked_index=data.answer_index, correct=correct))
-    prog = user.progress
+def quiz_answer(
+    track: str,
+    payload: QuizAnswerIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Sprawdza odpowiedź, przyznaje XP, zwraca kolejne pytanie albo {}.
+
+    Reguły XP:
+    - poprawna odpowiedź -> +5 XP w danym tracku
+    - niepoprawna -> 0 XP, ale dalej aktualizujemy streak,
+      bo ważne jest samo podejście (ogarnia grant_xp).
+    """
+    q = (
+        db.query(QuizQuestion)
+        .filter_by(
+            id=payload.question_id,
+            track=track,
+            module=payload.module,
+        )
+        .first()
+    )
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    options = q.options or []
+    if payload.answer_index < 0 or payload.answer_index >= len(options):
+        raise HTTPException(status_code=400, detail="Invalid answer index")
+
+    correct = payload.answer_index == q.correct_index
+
     if correct:
-        if track == "mind": prog.xp_mind += 10
-        elif track == "body": prog.xp_body += 10
-        else: prog.xp_soul += 10
-        prog.exp_total += 10
-    nxt = (db.query(QuizQuestion).filter_by(track=track, module=q.module)
-           .filter(QuizQuestion.order > q.order).order_by(QuizQuestion.order.asc()).first())
+        grant_xp(db, user.id, track=track, amount=5)
+    else:
+        # jeśli chcesz, żeby sam fakt podejścia do quizu też ruszał streak:
+        # grant_xp(db, user.id, track=track, amount=0)
+        pass
+
+    # kolejne pytanie w module
+    nxt = (
+        db.query(QuizQuestion)
+        .filter_by(track=track, module=q.module)
+        .filter(QuizQuestion.order > q.order)
+        .order_by(QuizQuestion.order)
+        .first()
+    )
+
     db.commit()
-    return {} if not nxt else nxt.as_public()
+
+    if not nxt:
+        # koniec quizu
+        return {}
+
+    return nxt.as_public()
+
+
+# ---------- TASKS ----------
+
 
 @router.get("/{track}/tasks", response_model=List[TaskOut])
-def list_tasks(track: str, module: str = Query(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    tasks = db.query(Task).filter_by(track=track, module=module).order_by(Task.order).all()
-    return [TaskOut.model_validate(t.__dict__) for t in tasks]
+def list_tasks(
+    track: str,
+    module: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> List[TaskOut]:
+    """
+    Zwraca taski dla modułu (Body/Soul w przyszłości też to wykorzystają).
+    """
+    tasks = (
+        db.query(Task)
+        .filter_by(track=track, module=module)
+        .order_by(Task.order)
+        .all()
+    )
+    return [
+        TaskOut(
+            id=t.id,
+            track=t.track,
+            module=t.module,
+            order=t.order,
+            title=t.title,
+            body=t.body,
+            difficulty=t.difficulty,
+            checklist=list(t.checklist or []),
+        )
+        for t in tasks
+    ]

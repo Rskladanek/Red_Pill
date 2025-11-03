@@ -21,11 +21,12 @@ class RedPillApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final base = ThemeData.dark();
     final theme = base.copyWith(
-      scaffoldBackgroundColor: const Color(0xFF050509),
-      cardColor: const Color(0xFF111827),
-      colorScheme: base.colorScheme.copyWith(
-        primary: const Color(0xFF7C3AED),
-        secondary: const Color(0xFFEC4899),
+      scaffoldBackgroundColor: const Color(0xFF050507),
+      cardColor: const Color(0xFF111218),
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFEF4444),   // CZERWIEŃ
+        secondary: Color(0xFFF97316), // POMARAŃCZ – lekki akcent
+        background: Color(0xFF050507),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -33,10 +34,18 @@ class RedPillApp extends StatelessWidget {
         centerTitle: false,
         titleTextStyle: TextStyle(
           fontSize: 18,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: Colors.white,
-          letterSpacing: 1.2,
+          letterSpacing: 1.4,
         ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Color(0xFF0B0C10),
+        selectedItemColor: Color(0xFFEF4444),
+        unselectedItemColor: Colors.grey,
+        selectedIconTheme: IconThemeData(size: 26),
+        unselectedIconTheme: IconThemeData(size: 22),
+        type: BottomNavigationBarType.fixed,
       ),
     );
 
