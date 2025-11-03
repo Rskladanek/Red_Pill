@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
 import 'pages/dashboard_page.dart';
-import 'models/user_model.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -13,68 +12,110 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
-  bool _busy = false;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _pass.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final UserModel u = await AuthService.register(_email.text.trim(), _pass.text);
+      await AuthService.register(_email.text.trim(), _pass.text);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const DashboardPage()),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Witaj: ${u.email}')),
-      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Register error: $e')),
-      );
+      setState(() {
+        _error = e.toString();
+      });
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final s = Theme.of(context).textTheme;
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Register', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _email,
-                  decoration: const InputDecoration(labelText: 'Email'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _pass,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _busy ? null : _submit,
-                    child: _busy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Create account'),
+          child: Card(
+            elevation: 4,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('REDPILL', style: s.headlineSmall),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Jedna apka. Trzy filary. Zero wymówek.',
+                    style: TextStyle(color: Colors.grey),
                   ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pushNamed('/login'),
-                  child: const Text('Mam już konto'),
-                )
-              ],
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: _email,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _pass,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Hasło',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_error != null) ...[
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _submit,
+                      child: _loading
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Stwórz konto'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.of(context).pushNamed('/login'),
+                    child: const Text('Mam już konto'),
+                  )
+                ],
+              ),
             ),
           ),
         ),

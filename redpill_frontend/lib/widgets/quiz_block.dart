@@ -1,103 +1,162 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../models/quiz_question_model.dart';
 
 class QuizBlock extends StatefulWidget {
-  final String track; // 'mind' | 'body' | 'soul'
-  final Map<String, dynamic> quiz; // payload pierwszego pytania
+  final String track;
+  final String module;
 
-  const QuizBlock({super.key, required this.track, required this.quiz});
+  const QuizBlock({
+    super.key,
+    required this.track,
+    required this.module,
+  });
 
   @override
   State<QuizBlock> createState() => _QuizBlockState();
 }
 
 class _QuizBlockState extends State<QuizBlock> {
-  late Map<String, dynamic> _current;
-  int? _selected;
-  bool _busy = false;
-
-  String get _module =>
-      (_current['module'] ?? widget.quiz['module'] ?? '').toString();
+  QuizQuestionModel? _current;
+  int? _selectedIndex;
+  bool _loading = true;
+  bool _finished = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _current = Map<String, dynamic>.from(widget.quiz);
+    _loadFirst();
+  }
+
+  Future<void> _loadFirst() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _finished = false;
+      _selectedIndex = null;
+    });
+    try {
+      final q = await ApiService.startQuiz(widget.track, widget.module);
+      if (!mounted) return;
+      setState(() {
+        _current = q;
+        _finished = q == null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Future<void> _submit() async {
-    if (_selected == null || _busy) return;
-    setState(() => _busy = true);
+    if (_current == null || _selectedIndex == null) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final int qid = (_current['question_id'] as num).toInt();
       final next = await ApiService.answerQuiz(
-        track: widget.track,
-        module: _module,
-        questionId: qid,
-        answerIndex: _selected!,
+        widget.track,
+        _current!.id,
+        widget.module,
+        _selectedIndex!,
       );
-
       if (!mounted) return;
-
-      if (next == null) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Quiz ukończony')));
-      } else {
-        setState(() {
-          _current = next;
-          _selected = null;
-        });
-      }
+      setState(() {
+        _current = next;
+        _selectedIndex = null;
+        _finished = next == null;
+      });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Quiz error: $e')),
-      );
+      setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String question = (_current['question'] ?? 'Question').toString();
-    final List<String> options = (_current['options'] as List? ?? const [])
-        .map((e) => e.toString())
-        .toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+    if (_loading && _current == null && _error == null && !_finished) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
-          ...List.generate(options.length, (i) {
-            return RadioListTile<int>(
-              value: i,
-              groupValue: _selected,
-              onChanged: _busy ? null : (v) => setState(() => _selected = v),
-              title: Text(options[i]),
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-            );
-          }),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (_selected != null && !_busy) ? _submit : null,
-              child: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Wyślij'),
-            ),
+          const Icon(Icons.error_outline, color: Colors.red),
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: const TextStyle(color: Colors.redAccent),
           ),
           const SizedBox(height: 8),
-          Text("Module: $_module", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          TextButton(
+            onPressed: _loadFirst,
+            child: const Text('Spróbuj ponownie'),
+          ),
         ],
-      ),
+      );
+    }
+    if (_finished) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.greenAccent, size: 40),
+          const SizedBox(height: 12),
+          const Text('Quiz ogarnięty na dziś.'),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _loadFirst,
+            child: const Text('Zrób rundę od nowa'),
+          ),
+        ],
+      );
+    }
+    final q = _current!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Quiz – ${widget.module}',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
+        Text(q.question),
+        const SizedBox(height: 12),
+        ...List.generate(q.options.length, (i) {
+          final option = q.options[i];
+          return RadioListTile<int>(
+            value: i,
+            groupValue: _selectedIndex,
+            onChanged: (v) {
+              setState(() => _selectedIndex = v);
+            },
+            title: Text(option),
+          );
+        }),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: _loading ? null : _submit,
+            child: _loading
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Wyślij'),
+          ),
+        ),
+      ],
     );
   }
 }

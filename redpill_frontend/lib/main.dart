@@ -13,12 +13,31 @@ void main() {
 class RedPillApp extends StatelessWidget {
   const RedPillApp({super.key});
 
+  Future<UserModel?> _loadUser() async {
+    return AuthService.loadSession();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeData.dark(useMaterial3: true).copyWith(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF9B59FF), brightness: Brightness.dark),
-      scaffoldBackgroundColor: const Color(0xFF0F0E11),
-      cardColor: const Color(0xFF17161A),
+    final base = ThemeData.dark();
+    final theme = base.copyWith(
+      scaffoldBackgroundColor: const Color(0xFF050509),
+      cardColor: const Color(0xFF111827),
+      colorScheme: base.colorScheme.copyWith(
+        primary: const Color(0xFF7C3AED),
+        secondary: const Color(0xFFEC4899),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+          letterSpacing: 1.2,
+        ),
+      ),
     );
 
     return MaterialApp(
@@ -28,16 +47,17 @@ class RedPillApp extends StatelessWidget {
       routes: {
         '/login': (_) => const LoginPage(),
         '/register': (_) => const RegisterPage(),
+        '/dashboard': (_) => const DashboardPage(),
       },
       home: FutureBuilder<UserModel?>(
-        future: AuthService.checkSession(),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
+        future: _loadUser(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          final user = snap.data;
+          final user = snapshot.data;
           if (user == null) {
             return const LoginPage();
           }

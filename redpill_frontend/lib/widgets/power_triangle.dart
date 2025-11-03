@@ -1,105 +1,56 @@
 import 'package:flutter/material.dart';
 
-/// Czerwony radar-triangle.
-/// mindPct -> góra, bodyPct -> prawa dolna, soulPct -> lewa dolna.
 class PowerTriangle extends StatelessWidget {
-  final int mindPct;
-  final int bodyPct;
-  final int soulPct;
+  final int mind;
+  final int body;
+  final int soul;
 
   const PowerTriangle({
     super.key,
-    required this.mindPct,
-    required this.bodyPct,
-    required this.soulPct,
+    required this.mind,
+    required this.body,
+    required this.soul,
   });
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.2, // trochę wyższe niż szerokie
-      child: CustomPaint(
-        painter: _TrianglePainter(
-          mindPct: mindPct,
-          bodyPct: bodyPct,
-          soulPct: soulPct,
+    final total = (mind + body + soul).clamp(1, 1 << 31);
+    double ratio(int v) => v / total;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildBar(context, 'MIND', ratio(mind)),
+        const SizedBox(height: 8),
+        _buildBar(context, 'BODY', ratio(body)),
+        const SizedBox(height: 8),
+        _buildBar(context, 'SOUL', ratio(soul)),
+      ],
+    );
+  }
+
+  Widget _buildBar(BuildContext context, String label, double value) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: Colors.grey.shade400,
+            letterSpacing: 1.4,
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: value,
+            minHeight: 6,
+          ),
+        ),
+      ],
     );
-  }
-}
-
-class _TrianglePainter extends CustomPainter {
-  final int mindPct;
-  final int bodyPct;
-  final int soulPct;
-
-  _TrianglePainter({
-    required this.mindPct,
-    required this.bodyPct,
-    required this.soulPct,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final red = const Color(0xffc80032);
-    final redSoft = const Color(0x66c80032);
-    final stroke = Paint()
-      ..color = red
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    final fillPaint = Paint()
-      ..color = redSoft
-      ..style = PaintingStyle.fill;
-
-    // wierzchołki dużego trójkąta
-    final top = Offset(size.width / 2, 0);
-    final left = Offset(0, size.height);
-    final right = Offset(size.width, size.height);
-
-    // środek
-    final center = Offset(
-      (top.dx + left.dx + right.dx) / 3,
-      (top.dy + left.dy + right.dy) / 3,
-    );
-
-    Offset interp(Offset v, int pct) {
-      final t = pct.clamp(0, 100) / 100.0;
-      return Offset(
-        center.dx + (v.dx - center.dx) * t,
-        center.dy + (v.dy - center.dy) * t,
-      );
-    }
-
-    final pMind = interp(top, mindPct);
-    final pBody = interp(right, bodyPct);
-    final pSoul = interp(left, soulPct);
-
-    // zewnętrzny trójkąt
-    final outer = Path()
-      ..moveTo(top.dx, top.dy)
-      ..lineTo(right.dx, right.dy)
-      ..lineTo(left.dx, left.dy)
-      ..close();
-
-    // wewnętrzny "radar"
-    final inner = Path()
-      ..moveTo(pMind.dx, pMind.dy)
-      ..lineTo(pBody.dx, pBody.dy)
-      ..lineTo(pSoul.dx, pSoul.dy)
-      ..close();
-
-    canvas.drawPath(inner, fillPaint);
-    canvas.drawPath(outer, stroke);
-    canvas.drawPath(inner, stroke);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TrianglePainter oldDelegate) {
-    return oldDelegate.mindPct != mindPct ||
-        oldDelegate.bodyPct != bodyPct ||
-        oldDelegate.soulPct != soulPct;
   }
 }
 

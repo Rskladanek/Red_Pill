@@ -12,24 +12,25 @@ class DashboardPage extends StatelessWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('RedPill'),
+          title: const Text('REDPILL'),
           actions: [
             IconButton(
+              icon: const Icon(Icons.logout),
               tooltip: 'Wyloguj',
               onPressed: () {
                 AuthService.logout();
-                Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('/login', (route) => false);
               },
-              icon: const Icon(Icons.logout),
             ),
           ],
           bottom: const TabBar(
-            isScrollable: false,
+            indicatorWeight: 3,
             tabs: [
-              Tab(icon: Icon(Icons.home), text: 'Home'),
-              Tab(icon: Icon(Icons.psychology), text: 'Mind'),
-              Tab(icon: Icon(Icons.build), text: 'Body'),
-              Tab(icon: Icon(Icons.bolt), text: 'Soul'),
+              Tab(text: 'HOME'),
+              Tab(text: 'MIND'),
+              Tab(text: 'BODY'),
+              Tab(text: 'SOUL'),
             ],
           ),
         ),
