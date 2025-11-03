@@ -12,7 +12,7 @@ class ApiService {
     return h;
   }
 
-  // ---- HOME SUMMARY ----
+  // ------------ HOME SUMMARY ------------
   static Future<Map<String, dynamic>> getSummary() async {
     final r = await http.get(Uri.parse('$_base/v1/progress/summary'), headers: _headers());
     if (r.statusCode == 200) {
@@ -21,7 +21,7 @@ class ApiService {
     throw Exception('summary ${r.statusCode}');
   }
 
-  // ---- MODULES ----
+  // ------------ MODULES ------------
   static Future<List<String>> getModules(String track) async {
     final r = await http.get(Uri.parse('$_base/v1/content/$track/modules'), headers: _headers());
     if (r.statusCode == 200) {
@@ -35,54 +35,56 @@ class ApiService {
     throw Exception('modules ${r.statusCode}');
   }
 
-  // ---- LESSONS ----
+  // ------------ LESSONS ------------
   static Future<List<Map<String, dynamic>>> getLessons(String track, String module) async {
     final uri = Uri.parse('$_base/v1/content/$track/lessons')
         .replace(queryParameters: {'module': module});
     final r = await http.get(uri, headers: _headers());
     if (r.statusCode == 200) {
       final body = jsonDecode(r.body);
-      if (body is List) {
-        return body.map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>()).toList();
-      }
-      if (body is Map && body['lessons'] is List) {
-        return (body['lessons'] as List)
-            .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
-            .toList();
-      }
-      throw Exception('Unexpected lessons payload: $body');
+      final list = body is List ? body : (body is Map && body['lessons'] is List ? body['lessons'] : []);
+      return (list as List)
+          .map<Map<String, dynamic>>((e) => (e as Map).cast<String, dynamic>())
+          .toList();
     }
     throw Exception('lessons ${r.statusCode}');
   }
 
+  /// Backend oczekuje JSON { "complete": true/false }
   static Future<void> markLesson(int lessonId, bool complete) async {
-    // jeśli masz tylko /complete po stronie backendu, zawsze strzelam w "complete"
-    final path = complete ? 'complete' : 'uncomplete';
     final r = await http.post(
-      Uri.parse('$_base/v1/content/lessons/$lessonId/$path'),
+      Uri.parse('$_base/v1/content/lessons/$lessonId/complete'),
       headers: _headers(),
+      body: jsonEncode({'complete': complete}),
     );
     if (r.statusCode != 200) {
       throw Exception('markLesson ${r.statusCode}: ${r.body}');
     }
   }
 
-  // ---- QUIZ ----
+  // ------------ QUIZ ------------
+  /// W Twoim backendzie /quiz/start jest GET -> ?module=…
   static Future<Map<String, dynamic>> startQuiz(String track, String module) async {
-    final r = await http.post(
-      Uri.parse('$_base/v1/content/$track/quiz/start'),
-      headers: _headers(),
-      body: jsonEncode({'module': module}),
-    );
-    if (r.statusCode != 200) {
-      throw Exception("startQuiz ${r.statusCode}: ${r.body}");
+    final uri = Uri.parse('$_base/v1/content/$track/quiz/start')
+        .replace(queryParameters: {'module': module});
+    final r = await http.get(uri, headers: _headers());
+
+    if (r.statusCode == 200) {
+      return (jsonDecode(r.body) as Map).cast<String, dynamic>();
     }
-    final data = jsonDecode(r.body);
-    if (data is Map<String, dynamic>) {
-      data.putIfAbsent('module', () => module);
-      return data;
+    // awaryjnie spróbuj POST jeśli ktoś zmieni backend:
+    if (r.statusCode == 405) {
+      final p = await http.post(
+        Uri.parse('$_base/v1/content/$track/quiz/start'),
+        headers: _headers(),
+        body: jsonEncode({'module': module}),
+      );
+      if (p.statusCode == 200) {
+        return (jsonDecode(p.body) as Map).cast<String, dynamic>();
+      }
+      throw Exception('startQuiz ${p.statusCode}: ${p.body}');
     }
-    throw Exception('Unexpected quiz start payload: $data');
+    throw Exception('startQuiz ${r.statusCode}: ${r.body}');
   }
 
   static Future<Map<String, dynamic>?> answerQuiz({
@@ -103,8 +105,9 @@ class ApiService {
     if (r.statusCode != 200) {
       throw Exception("answerQuiz ${r.statusCode}: ${r.body}");
     }
-    if (r.body.isEmpty) return null; // np. quiz zakończony
+    if (r.body.isEmpty) return null;
     final body = jsonDecode(r.body);
+    if (body is Map && body.isEmpty) return null;
     return (body as Map).cast<String, dynamic>();
   }
 }

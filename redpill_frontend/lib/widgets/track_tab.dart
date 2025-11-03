@@ -20,6 +20,35 @@ class _TrackTabState extends State<TrackTab> {
     _modsFuture = ApiService.getModules(widget.track);
   }
 
+  void _openLesson(Map<String, dynamic> lesson, String module) {
+    final title = '${module} — ${(lesson['title'] ?? 'Lesson').toString()}';
+    final content = (lesson['content'] ?? 'Brak treści').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF121212),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => DraggableScrollableSheet(
+        expand: false,
+        maxChildSize: 0.95,
+        initialChildSize: 0.85,
+        builder: (_, controller) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: ListView(
+            controller: controller,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              Text(content, style: const TextStyle(height: 1.4)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _startQuiz(String module) async {
     try {
       final first = await ApiService.startQuiz(widget.track, module);
@@ -36,6 +65,7 @@ class _TrackTabState extends State<TrackTab> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Quiz error: $e')),
       );
@@ -74,11 +104,13 @@ class _TrackTabState extends State<TrackTab> {
           itemBuilder: (context, i) {
             final module = modules[i];
             _lessonsFutures[module] ??= ApiService.getLessons(widget.track, module);
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(module, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
+
                 FutureBuilder<List<Map<String, dynamic>>>(
                   future: _lessonsFutures[module],
                   builder: (context, s) {
@@ -95,23 +127,28 @@ class _TrackTabState extends State<TrackTab> {
                     return Column(
                       children: [
                         for (final e in lessons)
-                          CheckboxListTile(
-                            value: (e['completed'] ?? false) as bool,
-                            onChanged: (v) async {
-                              try {
-                                await ApiService.markLesson((e['id'] as num).toInt(), v == true);
-                                setState(() {
-                                  _modsFuture = ApiService.getModules(widget.track);
-                                  _lessonsFutures[module] = ApiService.getLessons(widget.track, module);
-                                });
-                              } catch (err) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Mark error: $err')),
-                                );
-                              }
-                            },
-                            title: Text('${e['module']} — ${e['title']}'),
-                            controlAffinity: ListTileControlAffinity.trailing,
+                          ListTile(
+                            title: Text('$module — ${(e['title'] ?? 'Lesson').toString()}'),
+                            subtitle: (e['content'] != null && (e['content'] as String).isNotEmpty)
+                                ? Text((e['content'] as String).split('\n').first, maxLines: 1, overflow: TextOverflow.ellipsis)
+                                : null,
+                            onTap: () => _openLesson(e, module),
+                            trailing: Checkbox(
+                              value: (e['completed'] ?? false) as bool,
+                              onChanged: (v) async {
+                                try {
+                                  await ApiService.markLesson((e['id'] as num).toInt(), v == true);
+                                  setState(() {
+                                    _modsFuture = ApiService.getModules(widget.track);
+                                    _lessonsFutures[module] = ApiService.getLessons(widget.track, module);
+                                  });
+                                } catch (err) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Mark error: $err')),
+                                  );
+                                }
+                              },
+                            ),
                           ),
                         const SizedBox(height: 8),
                         Align(

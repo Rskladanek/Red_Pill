@@ -1,11 +1,10 @@
-import os
-from datetime import datetime, timedelta
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+from app.core.config import settings
 
-JWT_SECRET = os.getenv("JWT_SECRET", "devsecret")
-JWT_ALG = "HS256"
+ALGORITHM = "HS256"
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:
@@ -14,20 +13,13 @@ def get_password_hash(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     return _pwd.verify(password, password_hash)
 
-def create_access_token(user_id: int, email: str, expires: timedelta | None = None) -> str:
-    if expires is None:
-        expires = timedelta(days=30)
-    payload = {
-        "sub": str(user_id),
-        "email": email,
-        "exp": datetime.utcnow() + expires,
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+def create_access_token(*, sub: str, email: str, expires_minutes: Optional[int] = None) -> str:
+    expire = datetime.now(tz=timezone.utc) + timedelta(minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    payload: Dict[str, Any] = {"sub": sub, "email": email, "exp": expire}
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
-def decode_token(token: str) -> Dict[str, Any]:
+def decode_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-    except JWTError as e:
-        # log do konsoli, żeby było jasne czemu 401
-        print(f"[JWT] decode error: {e}")
-        return {}
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None

@@ -1,62 +1,47 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    Boolean,
-    ForeignKey,
-    UniqueConstraint,
-    Index,
-)
-from sqlalchemy.orm import relationship
-from app.db import Base
-
+from sqlalchemy import Integer, String, Text, JSON
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from app.db.base import Base
 
 class Lesson(Base):
     __tablename__ = "lessons"
-
-    id = Column(Integer, primary_key=True)
-    track = Column(String, nullable=False, index=True)      # "mind" | "body" | "soul"
-    module = Column(String, nullable=False, index=True)     # np. "Foundations", "Focus"
-    title = Column(String, nullable=False)
-    html = Column(Text, nullable=False, default="")
-
-    __table_args__ = (
-        UniqueConstraint("track", "module", "title", name="uq_lesson_unique"),
-        Index("ix_lesson_track_module", "track", "module"),
-    )
-
-
-class UserLesson(Base):
-    __tablename__ = "user_lessons"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    lesson_id = Column(Integer, ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False, index=True)
-    completed = Column(Boolean, nullable=False, default=False)
-
-    # relacje – nie musimy dopinać back_populates w User, żeby uniknąć kolejnego import hell
-    user = relationship("User")
-    lesson = relationship("Lesson")
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "lesson_id", name="uq_user_lesson"),
-    )
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    track: Mapped[str] = mapped_column(String, index=True)
+    module: Mapped[str] = mapped_column(String, index=True)
+    order: Mapped[int] = mapped_column(Integer, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    users = relationship("UserLesson", back_populates="lesson", cascade="all, delete")
 
 class QuizQuestion(Base):
     __tablename__ = "quiz_questions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    track: Mapped[str] = mapped_column(String, index=True)
+    module: Mapped[str] = mapped_column(String, index=True)
+    order: Mapped[int] = mapped_column(Integer, index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[list] = mapped_column(JSON, nullable=False)
+    correct_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=True)
 
-    id = Column(Integer, primary_key=True)
-    track = Column(String, nullable=False, index=True)      # "mind" | "body" | "soul"
-    module = Column(String, nullable=False, index=True)     # np. "Foundations"
-    question = Column(Text, nullable=False)
-    opt_a = Column(String, nullable=False)
-    opt_b = Column(String, nullable=False)
-    opt_c = Column(String, nullable=False)
-    # 0 -> A, 1 -> B, 2 -> C
-    correct = Column(Integer, nullable=False, default=0)
+    answers = relationship("UserQuizAnswer", back_populates="question", cascade="all, delete")
 
-    __table_args__ = (
-        Index("ix_quiz_track_module", "track", "module"),
-    )
+    def as_public(self):
+        return {
+            "question_id": self.id,
+            "module": self.module,
+            "question": self.question,
+            "options": self.options,
+        }
+
+class Task(Base):
+    __tablename__ = "tasks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    track: Mapped[str] = mapped_column(String, index=True)
+    module: Mapped[str] = mapped_column(String, index=True)
+    order: Mapped[int] = mapped_column(Integer, index=True)
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    difficulty: Mapped[str] = mapped_column(String, default="easy")
+    checklist: Mapped[list] = mapped_column(JSON, default=list)
+
+    attempts = relationship("UserTaskAttempt", back_populates="task", cascade="all, delete")

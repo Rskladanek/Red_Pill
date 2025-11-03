@@ -1,42 +1,30 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
-
-
+from pydantic import BaseModel
+from typing import List
 class LessonOut(BaseModel):
     id: int
+    track: str
+    module: str
+    order: int
     title: str
+    content: str
     completed: bool = False
-    html: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class LessonCompleteIn(BaseModel):
-    completed: bool = True
-
-
-class ModulesOut(BaseModel):
-    modules: List[str]
-
-
+class CompleteIn(BaseModel):
+    complete: bool
 class QuizStartOut(BaseModel):
-    quiz_id: int
     question_id: int
+    module: str
     question: str
     options: List[str]
-
-
 class QuizAnswerIn(BaseModel):
+    module: str
+    question_id: int
+    answer_index: int
+class TaskOut(BaseModel):
+    id: int
     track: str
-    quiz_id: Optional[int] = None
-    question_id: Optional[int] = None
-    answer: str
-
-
-class SummaryOut(BaseModel):
-    xp_mind: int = 0
-    xp_body: int = 0
-    xp_soul: int = 0
-    streak_days: int = 0
-    experience: int = 0
+    module: str
+    order: int
+    title: str
+    body: str
+    difficulty: str
+    checklist: List[str] = []

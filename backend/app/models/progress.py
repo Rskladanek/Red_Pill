@@ -1,18 +1,13 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
-from sqlalchemy.orm import relationship
-from app.db import Base
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Integer, ForeignKey
+from app.db.base import Base
 
 class UserProgress(Base):
     __tablename__ = "user_progress"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    track = Column(String, nullable=False)        # "mind" | "body" | "soul"
-    xp = Column(Integer, default=0, nullable=False)
-    streak_days = Column(Integer, default=0, nullable=False)
-
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    xp_mind: Mapped[int] = mapped_column(Integer, default=0)
+    xp_body: Mapped[int] = mapped_column(Integer, default=0)
+    xp_soul: Mapped[int] = mapped_column(Integer, default=0)
+    exp_total: Mapped[int] = mapped_column(Integer, default=0)
+    streak: Mapped[int] = mapped_column(Integer, default=0)
     user = relationship("User", back_populates="progress")
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "track", name="uq_user_track"),
-    )

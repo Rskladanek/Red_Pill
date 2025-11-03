@@ -1,19 +1,15 @@
 from pydantic import BaseModel, EmailStr
-
-
-class AuthIn(BaseModel):
-    email: EmailStr
-    password: str
-
-
+class Token(BaseModel):
+    token: str
 class UserOut(BaseModel):
     id: int
     email: EmailStr
-
-    class Config:
-        from_attributes = True  # zamiast orm_mode
-
-
-class AuthOut(BaseModel):
+class TokenWithUser(BaseModel):
     token: str
     user: UserOut
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+class RegisterIn(BaseModel):
+    email: EmailStr
+    password: str
